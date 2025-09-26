@@ -512,7 +512,7 @@ from Unet_attention import AttentionUNet,UNet,FPNUNet,  FPNUNetV2,FPNUNetV3,\
             ,FPNUNet_Liight,FPNUNet_Lighht,FPNUNet_ResNetEncoder,FPNUNet_SimpleEncoderFusion\
             ,FPNUNet_Simple_EncoderFusion,FPNUNet_Lighttt,FPNUNet_A_Lightt
 # 自己的模块
-from Data import BUS_UCLM_Dataset,get_data
+from Data import BUS_UCLM_Dataset,GetData
 from tools import plot_loss_curve
 from network.model import FPNUNet_CBAM_Residual
 from network.moldel2 import FPNUNet_CBAMResidual
@@ -546,11 +546,11 @@ def set_seed(seed: int = 2025):
 # ==================================================
 set_seed(2025)
 
-train_data = get_data(
+train_data = GetData(
     image_dir='/home/user/HUXUFENG/UI/Diffusin-net_GAN/BUSI/train/images',
     mask_dir='/home/user/HUXUFENG/UI/Diffusin-net_GAN/BUSI/train/masks'
 )
-val_data = get_data(
+val_data = GetData(
     image_dir='/home/user/HUXUFENG/UI/Diffusin-net_GAN/BUSI/val/images',
     mask_dir='/home/user/HUXUFENG/UI/Diffusin-net_GAN/BUSI/val/masks'
 )
@@ -642,6 +642,7 @@ best_val_loss = float("inf")
 top_k = 3
 saved_models = []
 
+
 for epoch in range(1, num_epochs + 1):
     # ----------- 训练 -----------
     model.train()
@@ -649,44 +650,35 @@ for epoch in range(1, num_epochs + 1):
     for imgs, masks in tqdm(train_loader, desc=f"[Train] Epoch {epoch}"):
         imgs, masks = imgs.to(device), masks.to(device)
         optimizer.zero_grad()
-        outputs = model(imgs)
 
+        outputs = model(imgs)
         if isinstance(outputs, (list, tuple)):
             final_out, *aux_outs = outputs
         else:
             final_out, aux_outs = outputs, []
 
+        # 主损失
         loss_bce = bce_loss(final_out, masks)
         loss_dice = dice_loss_per_sample(final_out, masks).mean()
         main_loss = 0.5 * loss_bce + 0.5 * loss_dice
 
-       
+        # 辅助损失
         aux_loss = 0.0
         for aux in aux_outs:
             aux_bce = bce_loss(aux, masks)
             aux_dice = dice_loss_per_sample(aux, masks).mean()
             aux_loss += 0.5 * aux_bce + 0.5 * aux_dice
         if len(aux_outs) > 0:
-            
             aux_loss /= len(aux_outs)
-   
-        # if len(aux_outs) > 0:
-        #     aux_losses = []
-        #     for aux in aux_outs:
-        #         aux_bce = bce_loss(aux, masks)
-        #         aux_dice = dice_loss_per_sample(aux, masks).mean()
-        #         aux_losses.append(0.5 * aux_bce + 0.5 * aux_dice)
-        #     aux_loss = torch.stack(aux_losses).max()  # 用最难的分支
-        # else:
-        #     aux_loss = 0.0
-                 
-        # alpha = min(0.4, epoch / 50 * 0.4) 
+
+        # 动态权重
         alpha = min(0.4, max(0.0, (epoch - 20) / 50 * 0.4))
         if epoch < 40:
             loss = main_loss
         else:
             loss = main_loss + alpha * aux_loss
-        
+
+        # 反向传播
         loss.backward()
         optimizer.step()
         total_train_loss += loss.item() * imgs.size(0)
@@ -730,11 +722,11 @@ for epoch in range(1, num_epochs + 1):
         writer = csv.writer(f)
         writer.writerow([epoch, f"{avg_train:.6f}", f"{avg_val:.6f}", optimizer.param_groups[0]['lr']])
 
-    # 保存最优模型
+    # 保存最优模型（top-k 策略）
     model_file = os.path.join(log_dir, f"model_epoch{epoch}_{avg_val:.4f}.pth")
     torch.save(model.state_dict(), model_file)
     saved_models.append((avg_val, model_file))
-    saved_models.sort(key=lambda x: x[0])
+    saved_models.sort(key=lambda x: x[0])  # 按 val loss 升序
 
     if len(saved_models) > top_k:
         _, to_delete = saved_models.pop(-1)
@@ -762,15 +754,152 @@ for epoch in range(1, num_epochs + 1):
         composites = []
         for i in range(min(4, sample_imgs.size(0))):
             img, msk, pred = sample_imgs[i], sample_masks[i], sample_preds[i]
-            comp = torch.cat([img, msk, pred], dim=2)
+            comp = torch.cat([img, msk, pred], dim=2)  # 横向拼接
             composites.append(comp)
 
         grid = torch.stack(composites, dim=0)
-        vutils.save_image(grid, image_save_template.format(epoch), nrow=2, normalize=True, scale_each=True)
+        vutils.save_image(grid, image_save_template.format(epoch),
+                          nrow=2, normalize=True, scale_each=True)
 
+    # 画 loss 曲线
     plot_loss_curve(log_csv, output_path=loss_plot_path, show_head=False)
+
+    # 保存最后一个模型
     last_model_path = os.path.join(log_dir, "model_last.pth")
     torch.save(model.state_dict(), last_model_path)
     print(f"💾 Saved last model to {last_model_path}")
 
 print(f"✅ Training complete! Best val loss: {best_val_loss:.4f}")
+
+# for epoch in range(1, num_epochs + 1):
+#     # ----------- 训练 -----------
+#     model.train()
+#     total_train_loss = 0.0
+#     for imgs, masks in tqdm(train_loader, desc=f"[Train] Epoch {epoch}"):
+#         imgs, masks = imgs.to(device), masks.to(device)
+#         optimizer.zero_grad()
+#         outputs = model(imgs)
+
+#         if isinstance(outputs, (list, tuple)):
+#             final_out, *aux_outs = outputs
+#         else:
+#             final_out, aux_outs = outputs, []
+
+#         loss_bce = bce_loss(final_out, masks)
+#         loss_dice = dice_loss_per_sample(final_out, masks).mean()
+#         main_loss = 0.5 * loss_bce + 0.5 * loss_dice
+
+       
+#         aux_loss = 0.0
+#         for aux in aux_outs:
+#             aux_bce = bce_loss(aux, masks)
+#             aux_dice = dice_loss_per_sample(aux, masks).mean()
+#             aux_loss += 0.5 * aux_bce + 0.5 * aux_dice
+#         if len(aux_outs) > 0:
+            
+#             aux_loss /= len(aux_outs)
+   
+#         # if len(aux_outs) > 0:
+#         #     aux_losses = []
+#         #     for aux in aux_outs:
+#         #         aux_bce = bce_loss(aux, masks)
+#         #         aux_dice = dice_loss_per_sample(aux, masks).mean()
+#         #         aux_losses.append(0.5 * aux_bce + 0.5 * aux_dice)
+#         #     aux_loss = torch.stack(aux_losses).max()  # 用最难的分支
+#         # else:
+#         #     aux_loss = 0.0
+                 
+#         # alpha = min(0.4, epoch / 50 * 0.4) 
+#         alpha = min(0.4, max(0.0, (epoch - 20) / 50 * 0.4))
+#         if epoch < 40:
+#             loss = main_loss
+#         else:
+#             loss = main_loss + alpha * aux_loss
+        
+#         loss.backward()
+#         optimizer.step()
+#         total_train_loss += loss.item() * imgs.size(0)
+
+#     avg_train = total_train_loss / len(train_loader.dataset)
+
+#     # ----------- 验证 -----------
+#     model.eval()
+#     total_val_loss = 0.0
+#     with torch.no_grad():
+#         for imgs, masks in tqdm(val_loader, desc=f"[ Val ] Epoch {epoch}"):
+#             imgs, masks = imgs.to(device), masks.to(device)
+#             outputs = model(imgs)
+
+#             if isinstance(outputs, (list, tuple)):
+#                 final_out, *aux_outs = outputs
+#             else:
+#                 final_out, aux_outs = outputs, []
+
+#             loss_bce = bce_loss(final_out, masks)
+#             loss_dice = dice_loss_per_sample(final_out, masks).mean()
+#             main_loss = 0.5 * loss_bce + 0.5 * loss_dice
+
+#             aux_loss = 0.0
+#             for aux in aux_outs:
+#                 aux_bce = bce_loss(aux, masks)
+#                 aux_dice = dice_loss_per_sample(aux, masks).mean()
+#                 aux_loss += 0.5 * aux_bce + 0.5 * aux_dice
+#             if len(aux_outs) > 0:
+#                 aux_loss /= len(aux_outs)
+
+#             loss = main_loss + 0.4 * aux_loss
+#             total_val_loss += loss.item() * imgs.size(0)
+
+#     avg_val = total_val_loss / len(val_loader.dataset)
+
+#     print(f"Epoch {epoch:02d} | Train Loss: {avg_train:.4f} | Val Loss: {avg_val:.4f}")
+
+#     # 写日志
+#     with open(log_csv, mode="a", newline="") as f:
+#         writer = csv.writer(f)
+#         writer.writerow([epoch, f"{avg_train:.6f}", f"{avg_val:.6f}", optimizer.param_groups[0]['lr']])
+
+#     # 保存最优模型
+#     model_file = os.path.join(log_dir, f"model_epoch{epoch}_{avg_val:.4f}.pth")
+#     torch.save(model.state_dict(), model_file)
+#     saved_models.append((avg_val, model_file))
+#     saved_models.sort(key=lambda x: x[0])
+
+#     if len(saved_models) > top_k:
+#         _, to_delete = saved_models.pop(-1)
+#         if os.path.exists(to_delete):
+#             os.remove(to_delete)
+#             print(f"🗑️ Deleted old model: {to_delete}")
+
+#     if avg_val < best_val_loss:
+#         best_val_loss = avg_val
+
+#     # 每10轮保存可视化图
+#     if epoch % 10 == 0:
+#         sample_imgs, sample_masks = next(iter(val_loader))
+#         sample_imgs = sample_imgs.to(device)
+#         with torch.no_grad():
+#             sample_logits = model(sample_imgs)
+#             if isinstance(sample_logits, (list, tuple)):
+#                 final_out, *aux_outs = sample_logits
+#             else:
+#                 final_out, aux_outs = sample_logits, []
+#             sample_probs = torch.sigmoid(final_out)
+#             sample_preds = (sample_probs > 0.5).float()
+
+#         sample_masks = sample_masks.to(device)
+#         composites = []
+#         for i in range(min(4, sample_imgs.size(0))):
+#             img, msk, pred = sample_imgs[i], sample_masks[i], sample_preds[i]
+#             comp = torch.cat([img, msk, pred], dim=2)
+#             composites.append(comp)
+
+#         grid = torch.stack(composites, dim=0)
+#         vutils.save_image(grid, image_save_template.format(epoch), nrow=2, normalize=True, scale_each=True)
+
+#     plot_loss_curve(log_csv, output_path=loss_plot_path, show_head=False)
+#     last_model_path = os.path.join(log_dir, "model_last.pth")
+#     torch.save(model.state_dict(), last_model_path)
+#     print(f"💾 Saved last model to {last_model_path}")
+
+# print(f"✅ Training complete! Best val loss: {best_val_loss:.4f}")

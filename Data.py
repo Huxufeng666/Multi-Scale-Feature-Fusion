@@ -5,6 +5,8 @@ from PIL import Image
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 
+
+
 class GetData(Dataset):
     def __init__(self, image_dir: str, mask_dir: str,
                  image_transform=None, mask_transform=None):
@@ -13,24 +15,18 @@ class GetData(Dataset):
         self.image_paths = sorted(os.listdir(image_dir))
 
         # 图像变换
-        if image_transform is None:
-            self.image_transform = transforms.Compose([
-                transforms.Resize((256, 256)),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.5], std=[0.5])
-            ])
-        else:
-            self.image_transform = image_transform
+        self.image_transform = image_transform or transforms.Compose([
+            transforms.Resize((256, 256)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5], std=[0.5])
+        ])
 
-        # mask 变换
-        if mask_transform is None:
-            self.mask_transform = transforms.Compose([
-                transforms.Resize((256, 256)),
-                transforms.ToTensor(),
-                transforms.Lambda(lambda x: (x > 0.5).float())  # 二值化
-            ])
-        else:
-            self.mask_transform = mask_transform
+        # mask 变换（保持单通道）
+        self.mask_transform = mask_transform or transforms.Compose([
+            transforms.Resize((256, 256), interpolation=Image.NEAREST),
+            transforms.ToTensor(),
+            transforms.Lambda(lambda x: (x > 0.5).float())  # 二值化
+        ])
 
     def __len__(self):
         return len(self.image_paths)
@@ -45,28 +41,27 @@ class GetData(Dataset):
         mask1_path = os.path.join(self.mask_dir, f"{base_name}_mask.png")
         mask2_path = os.path.join(self.mask_dir, f"{base_name}_mask_1.png")
 
-        if os.path.exists(mask1_path) and os.path.exists(mask2_path):
-            # 同时存在两个 mask → 拼接为多通道
-            mask1 = cv2.imread(mask1_path, cv2.IMREAD_GRAYSCALE)
-            mask2 = cv2.imread(mask2_path, cv2.IMREAD_GRAYSCALE)
-            mask = np.stack([mask1, mask2], axis=-1)  # (H, W, 2)
-            mask = Image.fromarray(mask)  # 转为 PIL 以兼容 transform
+        mask1 = cv2.imread(mask1_path, cv2.IMREAD_GRAYSCALE) if os.path.exists(mask1_path) else None
+        mask2 = cv2.imread(mask2_path, cv2.IMREAD_GRAYSCALE) if os.path.exists(mask2_path) else None
 
-        elif os.path.exists(mask1_path):
-            mask = Image.open(mask1_path).convert("L")
-
-        elif os.path.exists(mask2_path):
-            mask = Image.open(mask2_path).convert("L")
-
-        else:
+        if (mask1 is None) and (mask2 is None):
             raise FileNotFoundError(f"No mask found for {base_name}")
 
+        # --- 合并为单通道 ---
+        if mask1 is not None and mask2 is not None:
+            mask = np.maximum(mask1, mask2)  # 并集
+        elif mask1 is not None:
+            mask = mask1
+        else:
+            mask = mask2
+
+        mask = Image.fromarray(mask)
+
         # --- transform ---
-        image = self.image_transform(image)
-        mask = self.mask_transform(mask)
+        image = self.image_transform(image)   # (1, 256, 256)
+        mask = self.mask_transform(mask)      # (1, 256, 256)
 
         return image, mask
-
 
 # class BUS_UCLM_Dataset(Dataset):
 #     def __init__(self, image_dir, mask_dir, transform=None, mask_transform=None):
