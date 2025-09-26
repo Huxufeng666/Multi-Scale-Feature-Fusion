@@ -18,46 +18,229 @@ from glob import glob
 
 
 from medpy.metric.binary import hd95 # # pip install medpy
-import datetime
-from network.model import FPNUNet_CBAM_Residual
+# import datetime
+# from network.moldel2 import FPNUNet_CBAMResidual  
 
 
     
     
+# import os
+# import torch
+# import torch.nn as nn
+# import numpy as np
+# import csv
+# from torch.utils.data import DataLoader
+# from tqdm import tqdm
+# from glob import glob
+# from network.moldel2 import FPNUNet_CBAMResidual   
+# # --- 配置 ---
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# # 指定包含所有权重文件的目录
+# weight_dir = "results/FPNUNet_CBAMResidual_20250924_004042_BUSI456"
+
+# # --- 加载数据 ---
+# test_data = get_data(
+#     image_dir='/home/user/HUXUFENG/UI/Diffusin-net_GAN/BUSI/test/images',
+#     mask_dir='/home/user/HUXUFENG/UI/Diffusin-net_GAN/BUSI/test/masks'
+# )
+# test_loader = DataLoader(test_data, batch_size=1, shuffle=False)
+
+# # --- 评估指标函数（保持不变）---
+# def dice_coef(pred, target, eps=1e-6):
+#     pred = pred.flatten()
+#     target = target.flatten()
+#     intersection = (pred * target).sum()
+#     return (2. * intersection + eps) / (pred.sum() + target.sum() + eps)
+
+# def iou_score(pred, target, eps=1e-6):
+#     pred = pred.flatten()
+#     target = target.flatten()
+#     intersection = (pred * target).sum()
+#     union = pred.sum() + target.sum() - intersection
+#     return (intersection + eps) / (union + eps)
+
+# def precision_score(pred, target, eps=1e-6):
+#     pred = pred.flatten()
+#     target = target.flatten()
+#     tp = (pred * target).sum()
+#     fp = (pred * (1 - target)).sum()
+#     return (tp + eps) / (tp + fp + eps)
+
+# def recall_score(pred, target, eps=1e-6):
+#     pred = pred.flatten()
+#     target = target.flatten()
+#     tp = (pred * target).sum()
+#     fn = ((1 - pred) * target).sum()
+#     return (tp + eps) / (tp + fn + eps)
+
+# def specificity_score(pred, target, eps=1e-6):
+#     pred = pred.flatten()
+#     target = target.flatten()
+#     tn = ((1 - pred) * (1 - target)).sum()
+#     fp = (pred * (1 - target)).sum()
+#     return (tn + eps) / (tn + fp + eps)
+
+# def pixel_accuracy(pred, target):
+#     return (pred == target).sum() / np.prod(target.shape)
+    
+# # --- 存储所有模型的指标结果 ---
+# all_metrics = {
+#     'dice': [], 'iou': [], 'prec': [], 'recall': [],
+#     'spe': [], 'acc': [], 'hd95': []
+# }
+
+# # 遍历目录下的所有 .pth 或 .pt 文件
+# weight_files = glob(os.path.join(weight_dir, "*.pth")) + glob(os.path.join(weight_dir, "*.pt"))
+
+# if not weight_files:
+#     print(f"在目录 {weight_dir} 中未找到 .pth 或 .pt 文件。")
+# else:
+#     # 定义 CSV 文件名
+#     csv_filename = "ensemble_metrics.csv"
+#     csv_file_path = os.path.join(weight_dir, csv_filename)
+    
+#     # 写入 CSV 文件
+#     with open(csv_file_path, 'w', newline='') as csvfile:
+#         fieldnames = ['Model Name', 'Dice', 'IoU', 'Precision', 'Recall', 'Specificity', 'Accuracy', 'Hd95']
+#         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        
+#         # 写入表头
+#         writer.writeheader()
+        
+#         # 循环遍历每个权重文件
+#         for weight_path in weight_files:
+#             print(f"正在评估模型: {weight_path}")
+            
+#             # --- 加载模型 ---
+#             model = FPNUNet_CBAMResidual()
+#             model = nn.DataParallel(model)
+#             model.load_state_dict(torch.load(weight_path, map_location=device))
+#             model = model.to(device)
+#             model.eval()
+
+#             # --- 测试与统计单个模型的平均指标 ---
+#             dice_list, iou_list, prec_list, recall_list, acc_list, spe_list, hd95_list = [], [], [], [], [], [], []
+#             with torch.no_grad():
+#                 for images, masks in tqdm(test_loader, desc=f"Evaluating {os.path.basename(weight_path)}"):
+#                     images = images.to(device)
+#                     masks = masks.to(device)
+                    
+#                     outputs, *aux_outs = model(images)
+#                     preds = torch.sigmoid(outputs)
+#                     preds = (preds > 0.5).float()
+                    
+#                     dice_list.append(dice_coef(preds, masks).item())
+#                     iou_list.append(iou_score(preds, masks).item())
+#                     prec_list.append(precision_score(preds, masks).item())
+#                     recall_list.append(recall_score(preds, masks).item())
+#                     spe_list.append(specificity_score(preds, masks).item())
+                    
+#                     pred_np = preds.cpu().numpy().astype(np.uint8)[0, 0]
+#                     mask_np = masks.cpu().numpy().astype(np.uint8)[0, 0]
+#                     acc_list.append(pixel_accuracy(pred_np, mask_np))
+                    
+#                     try:
+#                         if pred_np.any() and mask_np.any():
+#                             hd95_val = hd95(pred_np, mask_np)
+#                         else:
+#                             hd95_val = np.nan
+#                     except:
+#                         hd95_val = np.nan
+#                     hd95_list.append(hd95_val)
+            
+#             # 计算当前模型的平均指标
+#             avg_dice = np.nanmean(dice_list)
+#             avg_iou = np.nanmean(iou_list)
+#             avg_prec = np.nanmean(prec_list)
+#             avg_recall = np.nanmean(recall_list)
+#             avg_spe = np.nanmean(spe_list)
+#             avg_acc = np.nanmean(acc_list)
+#             avg_hd95 = np.nanmean([v for v in hd95_list if not np.isnan(v)])
+
+#             # 将当前模型的平均指标添加到总列表中
+#             all_metrics['dice'].append(avg_dice)
+#             all_metrics['iou'].append(avg_iou)
+#             all_metrics['prec'].append(avg_prec)
+#             all_metrics['recall'].append(avg_recall)
+#             all_metrics['spe'].append(avg_spe)
+#             all_metrics['acc'].append(avg_acc)
+#             all_metrics['hd95'].append(avg_hd95)
+            
+#             # 写入当前模型的结果到 CSV
+#             writer.writerow({
+#                 'Model Name': os.path.basename(weight_path),
+#                 'Dice': f"{avg_dice:.4f}",
+#                 'IoU': f"{avg_iou:.4f}",
+#                 'Precision': f"{avg_prec:.4f}",
+#                 'Recall': f"{avg_recall:.4f}",
+#                 'Specificity': f"{avg_spe:.4f}",
+#                 'Accuracy': f"{avg_acc:.4f}",
+#                 'Hd95': f"{avg_hd95:.4f}" if not np.isnan(avg_hd95) else "N/A"
+#             })
+            
+#         # --- 统计所有模型的平均值和标准差 ---
+#         final_results = {}
+#         for metric, values in all_metrics.items():
+#             if values: # 确保列表不为空
+#                 avg = np.nanmean(values)
+#                 std = np.nanstd(values)
+#                 final_results[metric] = {'avg': avg, 'std': std}
+#             else:
+#                 final_results[metric] = {'avg': np.nan, 'std': np.nan}
+        
+#         # 将最终的平均值和标准差写入 CSV
+#         writer.writerow({
+#             'Model Name': f"Ensemble Mean ± Std ({len(weight_files)} models)",
+#             'Dice': f"{final_results['dice']['avg']:.4f} ± {final_results['dice']['std']:.4f}",
+#             'IoU': f"{final_results['iou']['avg']:.4f} ± {final_results['iou']['std']:.4f}",
+#             'Precision': f"{final_results['prec']['avg']:.4f} ± {final_results['prec']['std']:.4f}",
+#             'Recall': f"{final_results['recall']['avg']:.4f} ± {final_results['recall']['std']:.4f}",
+#             'Specificity': f"{final_results['spe']['avg']:.4f} ± {final_results['spe']['std']:.4f}",
+#             'Accuracy': f"{final_results['acc']['avg']:.4f} ± {final_results['acc']['std']:.4f}",
+#             'Hd95': f"{final_results['hd95']['avg']:.4f} ± {final_results['hd95']['std']:.4f}"
+#         })
+        
+#     print(f"\n✅ 所有评估结果已保存到 {csv_file_path}")
+
+
+
 import os
+import csv
+from glob import glob
+from tqdm import tqdm
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
-import csv
 from torch.utils.data import DataLoader
-from tqdm import tqdm
-from glob import glob
 
-# --- 配置 ---
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# 指定包含所有权重文件的目录
-weight_dir = "results/DataParallel_20250919_181826_BUSI"
+# ==== 你的工程内依赖 ====
+# 模型
+from network.moldel2 import FPNUNet_CBAMResidual
+# 数据
+from Data import get_data
 
-# --- 加载数据 ---
-test_data = get_data(
-    image_dir='/home/user/HUXUFENG/UI/Diffusin-net_GAN/BUSI/test/images',
-    mask_dir='/home/user/HUXUFENG/UI/Diffusin-net_GAN/BUSI/test/masks'
-)
-test_loader = DataLoader(test_data, batch_size=1, shuffle=False)
+# ==== 可选的 hd95 ====
+try:
+    from medpy.metric.binary import hd95 as hd95_fn
+    _HAS_HAUSDORFF = True
+except Exception:
+    hd95_fn = None
+    _HAS_HAUSDORFF = False
 
-# --- 评估指标函数（保持不变）---
+# ---------------- Metrics ----------------
 def dice_coef(pred, target, eps=1e-6):
+    # pred/target: torch.Tensor (B,1,H,W) , 已经是 {0,1}
     pred = pred.flatten()
     target = target.flatten()
-    intersection = (pred * target).sum()
-    return (2. * intersection + eps) / (pred.sum() + target.sum() + eps)
+    inter = (pred * target).sum()
+    return (2. * inter + eps) / (pred.sum() + target.sum() + eps)
 
 def iou_score(pred, target, eps=1e-6):
     pred = pred.flatten()
     target = target.flatten()
-    intersection = (pred * target).sum()
-    union = pred.sum() + target.sum() - intersection
-    return (intersection + eps) / (union + eps)
+    inter = (pred * target).sum()
+    union = pred.sum() + target.sum() - inter
+    return (inter + eps) / (union + eps)
 
 def precision_score(pred, target, eps=1e-6):
     pred = pred.flatten()
@@ -80,84 +263,127 @@ def specificity_score(pred, target, eps=1e-6):
     fp = (pred * (1 - target)).sum()
     return (tn + eps) / (tn + fp + eps)
 
-def pixel_accuracy(pred, target):
-    return (pred == target).sum() / np.prod(target.shape)
-    
-# --- 存储所有模型的指标结果 ---
-all_metrics = {
-    'dice': [], 'iou': [], 'prec': [], 'recall': [],
-    'spe': [], 'acc': [], 'hd95': []
-}
+def pixel_accuracy(pred_np, target_np):
+    # pred_np/target_np: np.uint8 的二维 0/1 图
+    return (pred_np == target_np).mean()
 
-# 遍历目录下的所有 .pth 或 .pt 文件
-weight_files = glob(os.path.join(weight_dir, "*.pth")) + glob(os.path.join(weight_dir, "*.pt"))
+# ---------------- Loader helper ----------------
+_DROP_KEYS = ("total_ops", "total_params")
 
-if not weight_files:
-    print(f"在目录 {weight_dir} 中未找到 .pth 或 .pt 文件。")
-else:
-    # 定义 CSV 文件名
+def load_clean_state(model: nn.Module, ckpt_path: str, device: torch.device):
+    """过滤 thop 注入键 & 处理 DataParallel 前缀，宽松加载。"""
+    raw = torch.load(ckpt_path, map_location=device)
+    state = raw.get('state_dict', raw) if isinstance(raw, dict) else raw
+    # 1) drop thop keys
+    state = {k: v for k, v in state.items() if all(dk not in k for dk in _DROP_KEYS)}
+    # 2) 直接试 strict=False
+    try:
+        model.load_state_dict(state, strict=False)
+        return
+    except Exception:
+        pass
+    # 3) 处理 module. 前缀
+    has_module = any(k.startswith("module.") for k in state.keys())
+    if has_module:
+        # 去前缀
+        state2 = {k.replace("module.", "", 1): v for k, v in state.items()}
+    else:
+        # 加前缀
+        state2 = {f"module.{k}": v for k, v in state.items()}
+    model.load_state_dict(state2, strict=False)
+
+# ---------------- Main ----------------
+if __name__ == "__main__":
+    # --- 配置 ---
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    torch.backends.cudnn.benchmark = True  # 评测阶段也可开
+
+    # 指定包含所有权重文件的目录
+    weight_dir = "results/FPNUNet_CBAMResidual_20250924_004042_BUSI456"
+
+    # --- 加载数据 ---
+    test_data = get_data(
+        image_dir='/home/user/HUXUFENG/UI/Diffusin-net_GAN/BUSI/test/images',
+        mask_dir='/home/user/HUXUFENG/UI/Diffusin-net_GAN/BUSI/test/masks'
+    )
+    test_loader = DataLoader(test_data, batch_size=1, shuffle=False, num_workers=2)
+
+    # --- 收集权重文件 ---
+    weight_files = glob(os.path.join(weight_dir, "*.pth")) + glob(os.path.join(weight_dir, "*.pt"))
+    if not weight_files:
+        raise FileNotFoundError(f"在目录 {weight_dir} 中未找到 .pth 或 .pt 文件。")
+
+    # --- CSV 输出 ---
     csv_filename = "ensemble_metrics.csv"
     csv_file_path = os.path.join(weight_dir, csv_filename)
-    
-    # 写入 CSV 文件
+
+    # --- 累计各模型指标 ---
+    all_metrics = {'dice': [], 'iou': [], 'prec': [], 'recall': [], 'spe': [], 'acc': [], 'hd95': []}
+
     with open(csv_file_path, 'w', newline='') as csvfile:
         fieldnames = ['Model Name', 'Dice', 'IoU', 'Precision', 'Recall', 'Specificity', 'Accuracy', 'Hd95']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        
-        # 写入表头
         writer.writeheader()
-        
-        # 循环遍历每个权重文件
+
         for weight_path in weight_files:
-            print(f"正在评估模型: {weight_path}")
-            
-            # --- 加载模型 ---
-            model = FPNUNet_CBAM_Residual()
-            model = nn.DataParallel(model)
-            model.load_state_dict(torch.load(weight_path, map_location=device))
-            model = model.to(device)
+            print(f"\n==> 正在评估模型: {weight_path}")
+
+            # --- 构建模型（先 base，再按需包 DP）---
+            base = FPNUNet_CBAMResidual().to(device)
+            model = nn.DataParallel(base) if (torch.cuda.is_available() and torch.cuda.device_count() > 1) else base
+
+            # --- 加载权重（清理 thop/前缀）---
+            load_clean_state(model, weight_path, device)
             model.eval()
 
-            # --- 测试与统计单个模型的平均指标 ---
+            # --- 测试该模型 ---
             dice_list, iou_list, prec_list, recall_list, acc_list, spe_list, hd95_list = [], [], [], [], [], [], []
             with torch.no_grad():
                 for images, masks in tqdm(test_loader, desc=f"Evaluating {os.path.basename(weight_path)}"):
                     images = images.to(device)
                     masks = masks.to(device)
-                    
-                    outputs, *aux_outs = model(images)
-                    preds = torch.sigmoid(outputs)
-                    preds = (preds > 0.5).float()
-                    
+
+                    out = model(images)
+                    # 兼容：模型可能返回张量或 (主输出, 辅助输出…)
+                    if isinstance(out, (list, tuple)):
+                        logits = out[0]
+                    else:
+                        logits = out
+
+                    probs = torch.sigmoid(logits)
+                    preds = (probs > 0.5).float()
+
+                    # torch 上算核心指标
                     dice_list.append(dice_coef(preds, masks).item())
                     iou_list.append(iou_score(preds, masks).item())
                     prec_list.append(precision_score(preds, masks).item())
                     recall_list.append(recall_score(preds, masks).item())
                     spe_list.append(specificity_score(preds, masks).item())
-                    
-                    pred_np = preds.cpu().numpy().astype(np.uint8)[0, 0]
-                    mask_np = masks.cpu().numpy().astype(np.uint8)[0, 0]
+
+                    # numpy 上算像素精度 & hd95
+                    pred_np = preds.detach().cpu().numpy().astype(np.uint8)[0, 0]
+                    mask_np = masks.detach().cpu().numpy().astype(np.uint8)[0, 0]
                     acc_list.append(pixel_accuracy(pred_np, mask_np))
-                    
-                    try:
-                        if pred_np.any() and mask_np.any():
-                            hd95_val = hd95(pred_np, mask_np)
-                        else:
+                    if _HAS_HAUSDORFF and pred_np.any() and mask_np.any():
+                        try:
+                            hd95_val = float(hd95_fn(pred_np, mask_np))
+                        except Exception:
                             hd95_val = np.nan
-                    except:
+                    else:
                         hd95_val = np.nan
                     hd95_list.append(hd95_val)
-            
-            # 计算当前模型的平均指标
-            avg_dice = np.nanmean(dice_list)
-            avg_iou = np.nanmean(iou_list)
-            avg_prec = np.nanmean(prec_list)
-            avg_recall = np.nanmean(recall_list)
-            avg_spe = np.nanmean(spe_list)
-            avg_acc = np.nanmean(acc_list)
-            avg_hd95 = np.nanmean([v for v in hd95_list if not np.isnan(v)])
 
-            # 将当前模型的平均指标添加到总列表中
+            # --- 汇总该模型 ---
+            avg_dice = float(np.nanmean(dice_list))
+            avg_iou = float(np.nanmean(iou_list))
+            avg_prec = float(np.nanmean(prec_list))
+            avg_recall = float(np.nanmean(recall_list))
+            avg_spe = float(np.nanmean(spe_list))
+            avg_acc = float(np.nanmean(acc_list))
+            valid_hd = [v for v in hd95_list if not np.isnan(v)]
+            avg_hd95 = float(np.nanmean(valid_hd)) if len(valid_hd) > 0 else float("nan")
+
+            # 进全局
             all_metrics['dice'].append(avg_dice)
             all_metrics['iou'].append(avg_iou)
             all_metrics['prec'].append(avg_prec)
@@ -165,8 +391,8 @@ else:
             all_metrics['spe'].append(avg_spe)
             all_metrics['acc'].append(avg_acc)
             all_metrics['hd95'].append(avg_hd95)
-            
-            # 写入当前模型的结果到 CSV
+
+            # 写 CSV
             writer.writerow({
                 'Model Name': os.path.basename(weight_path),
                 'Dice': f"{avg_dice:.4f}",
@@ -177,18 +403,17 @@ else:
                 'Accuracy': f"{avg_acc:.4f}",
                 'Hd95': f"{avg_hd95:.4f}" if not np.isnan(avg_hd95) else "N/A"
             })
-            
-        # --- 统计所有模型的平均值和标准差 ---
+
+        # --- 全模型统计 ---
         final_results = {}
         for metric, values in all_metrics.items():
-            if values: # 确保列表不为空
-                avg = np.nanmean(values)
-                std = np.nanstd(values)
-                final_results[metric] = {'avg': avg, 'std': std}
+            if len(values) > 0:
+                avg = float(np.nanmean(values))
+                std = float(np.nanstd(values))
             else:
-                final_results[metric] = {'avg': np.nan, 'std': np.nan}
-        
-        # 将最终的平均值和标准差写入 CSV
+                avg, std = float("nan"), float("nan")
+            final_results[metric] = {'avg': avg, 'std': std}
+
         writer.writerow({
             'Model Name': f"Ensemble Mean ± Std ({len(weight_files)} models)",
             'Dice': f"{final_results['dice']['avg']:.4f} ± {final_results['dice']['std']:.4f}",
@@ -197,13 +422,10 @@ else:
             'Recall': f"{final_results['recall']['avg']:.4f} ± {final_results['recall']['std']:.4f}",
             'Specificity': f"{final_results['spe']['avg']:.4f} ± {final_results['spe']['std']:.4f}",
             'Accuracy': f"{final_results['acc']['avg']:.4f} ± {final_results['acc']['std']:.4f}",
-            'Hd95': f"{final_results['hd95']['avg']:.4f} ± {final_results['hd95']['std']:.4f}"
+            'Hd95': f"{final_results['hd95']['avg']:.4f} ± {final_results['hd95']['std']:.4f}" if not np.isnan(final_results['hd95']['avg']) else "N/A"
         })
-        
+
     print(f"\n✅ 所有评估结果已保存到 {csv_file_path}")
-
-
-
 
 
 

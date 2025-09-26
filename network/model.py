@@ -99,9 +99,9 @@ class TopDownFPN(nn.Module):
 
     def forward(self, features):
         features = features[::-1]
-        lateral = [l(f) for l, f in zip(self.lateral_convs, features)]
-        
-        fpn_outputs = []
+        lateral = [l(f) for l, f in zip(self.lateral_convs, features)] #[0,1,2,3,4]
+                         #   [x] [x]   [0,1,2,3,4]
+        fpn_outputs = [] #[0,0+1,[0+1+2]+3,2,3,4]
         x = lateral[0]
         fpn_outputs.append(self.smooth_convs[0](x))
         for i in range(1, len(lateral)):
@@ -109,39 +109,50 @@ class TopDownFPN(nn.Module):
             fpn_outputs.append(self.smooth_convs[i](x))
         return fpn_outputs[::-1]
 
+
+
 class FPNUNet_CBAM_Residual(nn.Module):
     def __init__(self, in_ch=1, out_ch=1, features=[64, 128, 256, 512]):
         super().__init__()
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
-
+          
+          # ---- Encoder path ----
         self.enc1 = ConvBlock(in_ch, features[0])
         self.enc2 = ConvBlock(features[0], features[1])
         self.enc3 = ConvBlock(features[1], features[2])
         self.enc4 = ConvBlock(features[2], features[3])
         self.bottleneck = ConvBlock(features[3], features[3]*2)
 
+
+          # ---- Cross-layer fusion adapters (for long skip connections) ----
         self.e1_adapter = nn.Conv2d(features[0], features[0], kernel_size=1)
         self.e2_adapter = nn.Conv2d(features[1], features[1], kernel_size=1)
         self.fuse3 = nn.Conv2d(features[1] + features[0], features[1], kernel_size=1)
         self.fuse4 = nn.Conv2d(features[2] + features[1], features[2], kernel_size=1)
 
+         # ---- Feature Pyramid Network (Top-down multi-scale feature fusion) ----
         self.fpn = TopDownFPN(
             in_channels_list=[features[3]*2, features[3], features[2], features[1], features[0]],
             out_channels=128
         )
 
-        self.up4 = nn.ConvTranspose2d(128, 128, kernel_size=2, stride=2)
-        self.cbam4 = CBAM(128*2 + features[3])
-        self.dec4 = ConvBlock(128*2 + features[3], 128)
+         # ---- Decoder path with CBAM attention at each stage ----
+         #Stage d4
+        self.up4 = nn.ConvTranspose2d(128, 128, kernel_size=2, stride=2) # upsample
+        self.cbam4 = CBAM(128*2 + features[3])                           # CBAM attention
+        self.dec4 = ConvBlock(128*2 + features[3], 128)                   # Decoder conv
 
+        # Stage d3
         self.up3 = nn.ConvTranspose2d(128, 128, kernel_size=2, stride=2)
         self.cbam3 = CBAM(128*2 + features[2])
         self.dec3 = ConvBlock(128*2 + features[2], 128)
-
+        
+        # Stage d2
         self.up2 = nn.ConvTranspose2d(128, 128, kernel_size=2, stride=2)
         self.cbam2 = CBAM(128*2 + features[1])
         self.dec2 = ConvBlock(128*2 + features[1], 128)
-
+        
+        # Stage d1
         self.up1 = nn.ConvTranspose2d(128, 128, kernel_size=2, stride=2)
         self.cbam1 = CBAM(128*2 + features[0])
         self.dec1 = ConvBlock(128*2 + features[0], 128)
@@ -157,27 +168,36 @@ class FPNUNet_CBAM_Residual(nn.Module):
         
 
     def forward(self, x):
-        e1 = self.enc1(x)
-        e2 = self.enc2(self.pool(e1))
+        # ---- Encoder ----
+        e1 = self.enc1(x)   # (B, 64, H, W)
+        e2 = self.enc2(self.pool(e1))  # (B, 128, H/2, W/2)
 
+
+        # Cross-layer fusion for e3
         e3_input = self.pool(e2)
         e1_resized = F.interpolate(self.e1_adapter(e1), size=e3_input.shape[2:], mode='bilinear', align_corners=True)
         combined3 = torch.cat([e3_input, e1_resized], dim=1)
-        e3 = self.enc3(self.fuse3(combined3))
+        e3 = self.enc3(self.fuse3(combined3))   # (B, 256, H/4, W/4)
 
+        # (B, 256, H/4, W/4)
         e4_input = self.pool(e3)
         e2_resized = F.interpolate(self.e2_adapter(e2), size=e4_input.shape[2:], mode='bilinear', align_corners=True)
         combined4 = torch.cat([e4_input, e2_resized], dim=1)
-        e4 = self.enc4(self.fuse4(combined4))
+        e4 = self.enc4(self.fuse4(combined4))   # (B, 512, H/8, W/8)
 
-        b = self.bottleneck(self.pool(e4))
+        # Bottleneck
+        b = self.bottleneck(self.pool(e4)) # (B, 1024, H/16, W/16)
 
-        fpn_feats = self.fpn([e1, e2, e3, e4, b])
+         # ---- FPN multi-scale feature fusion ----
+        fpn_feats = self.fpn([e1, e2, e3, e4, b]) # 5 feature maps, all mapped to 128 channels
 
-        d4 = self.up4(fpn_feats[4])
-        d4 = torch.cat([d4, fpn_feats[3], e4], dim=1)
-        d4 = self.cbam4(d4)
-        d4 = self.dec4(d4)
+        
+        # ---- Decoder with CBAM ----
+        # d4: combine bottleneck upsample + fpn + encoder skip
+        d4 = self.up4(fpn_feats[4])                        # upsample bottleneck
+        d4 = torch.cat([d4, fpn_feats[3], e4], dim=1)      # concat multi-scale + encoder
+        d4 = self.cbam4(d4)                                # CBAM attention
+        d4 = self.dec4(d4)                                 # conv refine
 
         d3 = self.up3(d4)
         d3 = torch.cat([d3, fpn_feats[2], e3], dim=1)
@@ -194,18 +214,16 @@ class FPNUNet_CBAM_Residual(nn.Module):
         d1 = self.cbam1(d1)
         d1 = self.dec1(d1)
 
-        # return self.final_conv(d1)
+        return self.final_conv(d1)
     
     
-        out_main = self.final_conv(d1)
+        # out_main = self.final_conv(d1)
         
-                # --- 辅助输出 (上采样到原图大小) ---
-        aux_out2 = F.interpolate(self.aux2(d2), size=x.shape[2:], mode='bilinear', align_corners=True)
-        aux_out3 = F.interpolate(self.aux3(d3), size=x.shape[2:], mode='bilinear', align_corners=True)
-        aux_out4 = F.interpolate(self.aux4(d4), size=x.shape[2:], mode='bilinear', align_corners=True)
+        #         # --- 辅助输出 (上采样到原图大小) ---
+        # aux_out2 = F.interpolate(self.aux2(d2), size=x.shape[2:], mode='bilinear', align_corners=True)
+        # aux_out3 = F.interpolate(self.aux3(d3), size=x.shape[2:], mode='bilinear', align_corners=True)
+        # aux_out4 = F.interpolate(self.aux4(d4), size=x.shape[2:], mode='bilinear', align_corners=True)
         
-        
-
-        
-        return out_main, aux_out2, aux_out3, aux_out4 
+        # return out_main, aux_out2, aux_out3, aux_out4 
+ 
 

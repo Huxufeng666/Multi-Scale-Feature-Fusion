@@ -506,11 +506,16 @@ import torch.nn.functional as F
 import torchvision.utils as vutils
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-
+from Unet_attention import AttentionUNet,UNet,FPNUNet,  FPNUNetV2,FPNUNetV3,\
+    FPNUNetV3_CBAM,FPNUNetV3_CBAM_pro,FPNUNetV3_CCBAM,FPNUNetV3_CCBAM,\
+        FPNUNetV3_CBAM_Residual_2,FPNUNetV3_CBAM_AttnGate,FPNUNet_Light,FPNUNet_LLight,FPNUNet_Lightt\
+            ,FPNUNet_Liight,FPNUNet_Lighht,FPNUNet_ResNetEncoder,FPNUNet_SimpleEncoderFusion\
+            ,FPNUNet_Simple_EncoderFusion,FPNUNet_Lighttt,FPNUNet_A_Lightt
 # 自己的模块
 from Data import BUS_UCLM_Dataset,get_data
 from tools import plot_loss_curve
 from network.model import FPNUNet_CBAM_Residual
+from network.moldel2 import FPNUNet_CBAMResidual
 
 # ==================================================
 # 1. 固定随机种子（完全可复现）
@@ -559,6 +564,7 @@ train_loader = DataLoader(
     num_workers=2, worker_init_fn=seed_worker, generator=g
 )
 
+
 val_loader = DataLoader(
     val_data, batch_size=32, drop_last=False, shuffle=False,
     num_workers=2, worker_init_fn=seed_worker, generator=g
@@ -568,7 +574,7 @@ val_loader = DataLoader(
 # ==================================================
 # 3. 模型、损失、优化器
 # ==================================================
-model = FPNUNet_CBAM_Residual().to(device)
+model = FPNUNet_CBAMResidual().to(device)
 model = nn.DataParallel(model)
 
 model_name = model.__class__.__name__

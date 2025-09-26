@@ -1,68 +1,71 @@
+import os
+import cv2
+import numpy as np
 from PIL import Image
-import os 
 from torch.utils.data import Dataset
+import torchvision.transforms as transforms
 
-from torchvision import transforms
-
-class get_data (Dataset):
-    def __init__(self, image_dir:str,mask_dir:str,image_transform=None,mask_transform=None):
-        
-        self.image_dir= image_dir
-        self.mask_dir = mask_dir        
+class GetData(Dataset):
+    def __init__(self, image_dir: str, mask_dir: str,
+                 image_transform=None, mask_transform=None):
+        self.image_dir = image_dir
+        self.mask_dir = mask_dir
         self.image_paths = sorted(os.listdir(image_dir))
-        
-        
+
+        # 图像变换
         if image_transform is None:
             self.image_transform = transforms.Compose([
                 transforms.Resize((256, 256)),
                 transforms.ToTensor(),
-                transforms.ColorJitter(brightness=0.1, contrast=0.1),
                 transforms.Normalize(mean=[0.5], std=[0.5])
             ])
         else:
             self.image_transform = image_transform
-            
+
+        # mask 变换
         if mask_transform is None:
             self.mask_transform = transforms.Compose([
                 transforms.Resize((256, 256)),
                 transforms.ToTensor(),
-                transforms.Lambda(lambda x: (x > 0.5).float())
+                transforms.Lambda(lambda x: (x > 0.5).float())  # 二值化
             ])
         else:
             self.mask_transform = mask_transform
 
-
-    def  __len__(self):
+    def __len__(self):
         return len(self.image_paths)
-    
-    
-    def __getitem__(self,idx):
+
+    def __getitem__(self, idx):
         image_name = self.image_paths[idx]
-        image_path = os.path.join(self.image_dir,image_name)
-        mask_path = os.path.join(self.mask_dir,image_name)
+        image_path = os.path.join(self.image_dir, image_name)
         image = Image.open(image_path).convert("L")
 
-        
-        base_name , ext = os.path.splitext(image_name)
-        mask_candidate1 = os.path.join(self.mask_dir,f"{base_name}_mask_1.png")
-        mask_candidate2 = os.path.join(self.mask_dir,f"{base_name}_mask.png")
-        if os.path.exists(mask_candidate1):
-            mask_path = mask_candidate1
-        elif os.path.exists(mask_candidate2):
-            mask_path = mask_candidate2
-        
+        # --- 处理 mask ---
+        base_name, _ = os.path.splitext(image_name)
+        mask1_path = os.path.join(self.mask_dir, f"{base_name}_mask.png")
+        mask2_path = os.path.join(self.mask_dir, f"{base_name}_mask_1.png")
+
+        if os.path.exists(mask1_path) and os.path.exists(mask2_path):
+            # 同时存在两个 mask → 拼接为多通道
+            mask1 = cv2.imread(mask1_path, cv2.IMREAD_GRAYSCALE)
+            mask2 = cv2.imread(mask2_path, cv2.IMREAD_GRAYSCALE)
+            mask = np.stack([mask1, mask2], axis=-1)  # (H, W, 2)
+            mask = Image.fromarray(mask)  # 转为 PIL 以兼容 transform
+
+        elif os.path.exists(mask1_path):
+            mask = Image.open(mask1_path).convert("L")
+
+        elif os.path.exists(mask2_path):
+            mask = Image.open(mask2_path).convert("L")
+
         else:
-            raise FileExistsError(f"not{base_name} mask")
-        
-        mask = Image.open(mask_path).convert("L")
-        
-      
+            raise FileNotFoundError(f"No mask found for {base_name}")
+
+        # --- transform ---
         image = self.image_transform(image)
         mask = self.mask_transform(mask)
-        
-        return image,mask
 
-
+        return image, mask
 
 
 # class BUS_UCLM_Dataset(Dataset):

@@ -128,116 +128,115 @@ def visualize_with_labels(orig, probs, mask, save_path, n=4):
 
 
 
-def plot_loss_curve(csv_path: str,
-                    output_path: str = "loss_curve.png",
-                    show_head: bool = True):
-    """
-    从指定的 CSV 文件读取训练/验证损失日志，并绘制 loss 曲线。
-
-    Args:
-        csv_path (str): CSV 文件路径，包含 epoch, train_loss, val_loss 三列。
-        output_path (str): 保存生成的曲线图像的路径。
-        show_head (bool): 是否在控制台打印 CSV 前五行。
-    """
-    # 1) 读取 CSV
-    df = pd.read_csv(csv_path, skiprows=8,header=0)
-
-    # 2) 清理列名：去除首尾空格、BOM 等
-    df.columns = df.columns.str.strip().str.replace('\ufeff', '')
-
-    # 3) 检查必须列是否存在
-    expected = ['epoch', 'train_loss', 'val_loss']
-    missing = [col for col in expected if col not in df.columns]
-    if missing:
-        print("CSV 中实际的列名为:", df.columns.tolist())
-        raise KeyError(f"在 CSV 中找不到以下列: {missing}")
-
-    # 4) （可选）打印前几行
-    if show_head:
-        print(df.head())
-
-    # 5) 绘制曲线
-    plt.figure(figsize=(8, 5))
-    plt.plot(df['epoch'], df['train_loss'], marker='o', label='Train Loss')
-    plt.plot(df['epoch'], df['val_loss'], marker='s', label='Val Loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.ylim(0, 0.8)
-    plt.title('Training & Validation Loss over Epochs')
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-
-    # 6) 保存并显示
-    plt.savefig(output_path, dpi=150)
-    plt.show()
-    print(f"Saved loss curve to {output_path}")
-
 # def plot_loss_curve(csv_path: str,
 #                     output_path: str = "loss_curve.png",
 #                     show_head: bool = True):
 #     """
 #     从指定的 CSV 文件读取训练/验证损失日志，并绘制 loss 曲线。
-    
+
 #     Args:
 #         csv_path (str): CSV 文件路径，包含 epoch, train_loss, val_loss 三列。
 #         output_path (str): 保存生成的曲线图像的路径。
-#         show_head (bool): 是否在控制台打印 CSV 前几行。
+#         show_head (bool): 是否在控制台打印 CSV 前五行。
 #     """
+#     # 1) 读取 CSV
+#     df = pd.read_csv(csv_path, skiprows=15,header=0)
 
-#     # ---------------------------
-#     # 1. 跳过前7行，读取后续数据，指定 header
-#     # ---------------------------
-#     try:
-#         df = pd.read_csv(csv_path)#, skiprows=7, header=0)
-#     except Exception as e:
-#         raise RuntimeError(f"❌ 读取 CSV 文件失败: {e}")
+#     # 2) 清理列名：去除首尾空格、BOM 等
+#     df.columns = df.columns.str.strip().str.replace('\ufeff', '')
 
-#     # ---------------------------
-#     # 2. 清洗列名（去除 BOM、空格）
-#     # ---------------------------
-#     df.columns = df.columns.str.strip().str.replace('\ufeff', '')  # 清洗列名
-
-#     # ---------------------------
-#     # 3. 确认所需列是否存在
-#     # ---------------------------
-#     required_cols = ['epoch', 'train_loss', 'val_loss']
-#     missing = [col for col in required_cols if col not in df.columns]
+#     # 3) 检查必须列是否存在
+#     expected = ['epoch', 'train_loss', 'val_loss']
+#     missing = [col for col in expected if col not in df.columns]
 #     if missing:
-#         print("❌ CSV 实际列名为:", df.columns.tolist())
+#         print("CSV 中实际的列名为:", df.columns.tolist())
 #         raise KeyError(f"在 CSV 中找不到以下列: {missing}")
 
-#     # ---------------------------
-#     # 4. 打印表头
-#     # ---------------------------
+#     # 4) （可选）打印前几行
 #     if show_head:
-#         print("✅ CSV 文件前几行如下：")
-#         print(df[required_cols].head())
+#         print(df.head())
 
-#     # ---------------------------
-#     # 5. 绘制 Loss 曲线
-#     # ---------------------------
+#     # 5) 绘制曲线
 #     plt.figure(figsize=(8, 5))
 #     plt.plot(df['epoch'], df['train_loss'], marker='o', label='Train Loss')
 #     plt.plot(df['epoch'], df['val_loss'], marker='s', label='Val Loss')
 #     plt.xlabel('Epoch')
 #     plt.ylabel('Loss')
-#     plt.ylim(0, 1)
+#     plt.ylim(0, 0.8)
 #     plt.title('Training & Validation Loss over Epochs')
 #     plt.legend()
 #     plt.grid(True)
 #     plt.tight_layout()
 
-#     # ---------------------------
-#     # 6. 保存并显示
-#     # ---------------------------
+#     # 6) 保存并显示
 #     plt.savefig(output_path, dpi=150)
 #     plt.show()
-#     print(f"✅ Loss 曲线保存至: {output_path}")
+#     print(f"Saved loss curve to {output_path}")
 
+import pandas as pd
+import matplotlib.pyplot as plt
 
-# plot_loss_curve("train_result/ResUNetEncoder_train_val_log.csv", output_path="train_result/ResUNetEncoder_loss_plot.png", show_head=False)
+def plot_loss_curve(csv_path: str,
+                    output_path: str = "loss_curve.png",
+                    show_head: bool = True):
+    """
+    从 CSV 中自动定位 'epoch, train_loss, val_loss' 的表头并绘制曲线。
+    无需手动设置 skiprows，兼容前面写的任意元信息行数。
+    """
+    # 先把文件读成行，自动找表头在哪一行
+    with open(csv_path, "r", encoding="utf-8-sig") as f:
+        lines = f.readlines()
+    if not lines:
+        raise ValueError(f"CSV 为空: {csv_path}")
 
+    header_idx = None
+    want = {"epoch", "train_loss", "val_loss"}
+    for i, line in enumerate(lines):
+        parts = [p.strip().lower().replace("\ufeff", "") for p in line.strip().split(",")]
+        if want.issubset(set(parts)):
+            header_idx = i
+            break
+
+    if header_idx is None:
+        # 打印前几行帮助排错
+        preview = "".join(lines[:20])
+        raise RuntimeError(
+            "未在 CSV 中发现包含 'epoch, train_loss, val_loss' 的表头行。\n"
+            f"请检查 CSV 内容。前20行预览：\n{preview}"
+        )
+
+    # 从表头行开始用 pandas 读
+    df = pd.read_csv(csv_path, skiprows=header_idx, header=0, encoding="utf-8-sig")
+
+    # 统一列名
+    df.columns = [c.strip().lower().replace("\ufeff", "") for c in df.columns]
+
+    # 校验列是否齐全
+    for col in ["epoch", "train_loss", "val_loss"]:
+        if col not in df.columns:
+            raise KeyError(f"缺少列: {col}；实际列: {df.columns.tolist()}")
+
+    # 转数值并清理
+    for col in ["epoch", "train_loss", "val_loss"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    df = df.dropna(subset=["epoch", "train_loss", "val_loss"])
+
+    if show_head:
+        print(df.head())
+
+    # 画图
+    plt.figure(figsize=(8, 5))
+    plt.plot(df["epoch"], df["train_loss"], marker="o", label="Train Loss")
+    plt.plot(df["epoch"], df["val_loss"], marker="s", label="Val Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title("Training & Validation Loss")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150)
+    plt.close()
+    print(f"Saved loss curve to {output_path}")
 
 
 

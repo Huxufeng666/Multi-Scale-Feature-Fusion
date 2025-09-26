@@ -26,6 +26,7 @@ from A import Del_FPN_F,Del_CBAM,FPNUNetV3_CBAM_Residual_SUM, FPNUNetV3_CBAM_Res
 import datetime
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torch.nn.functional as F
+from network.moldel2 import FPNUNet_CBAMResidual
 
 import os, random
 import numpy as np
@@ -47,10 +48,10 @@ def set_seed(seed: int = 42):
         pass
 
 set_seed(2025)
-train_data = BUS_UCLM_Dataset(image_dir='/home/user/HUXUFENG/UI/Diffusin-net_GAN/BUS-UCLM/train/images',
-                      mask_dir='/home/user/HUXUFENG/UI/Diffusin-net_GAN/BUS-UCLM/train/masks')
-val_data = BUS_UCLM_Dataset(image_dir='/home/user/HUXUFENG/UI/Diffusin-net_GAN/BUS-UCLM/val/images',
-                    mask_dir='/home/user/HUXUFENG/UI/Diffusin-net_GAN/BUS-UCLM/val/masks')
+train_data = get_data(image_dir='/home/user/HUXUFENG/UI/Diffusin-net_GAN/BUSI/train/images',
+                      mask_dir='/home/user/HUXUFENG/UI/Diffusin-net_GAN/BUSI/train/masks')
+val_data = get_data(image_dir='/home/user/HUXUFENG/UI/Diffusin-net_GAN/BUSI/val/images',
+                    mask_dir='/home/user/HUXUFENG/UI/Diffusin-net_GAN/BUSI/val/masks')
 
 # # ------------------------
 # # 1. 设备设置
@@ -66,7 +67,7 @@ val_loader = DataLoader(val_data, batch_size=32, drop_last=True, shuffle=False)
 # ------------------------
 # 3. 模型、损失、优化器
 # ------------------------
-model = FPNUNet_CBAM_Residual()
+model = FPNUNet_CBAMResidual()
 model = model.to(device) 
 model_name = model.__class__.__name__
 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%d_%M")
